@@ -26,28 +26,13 @@ void Door::setPosition(int _ofst4, int _ofst5) {
     // intakes Door values, sets Door Position
     
     int total = 0;
-    int high = 255;
-    int low = 0;
+    float calibrator = 0.56;
     int pos_a = _ofst4;
     int pos_b = _ofst5;
     
-    if (pos_b == 1){
-        total = pos_a + high;
-    }
+    total = pos_a + (pos_b * 256);
     
-    else if (pos_b == 2) {
-        total = pos_a + (high*2);
-    }
-    
-    else if (pos_b == 3) {
-        total = pos_a + (high*3);
-    }
-    
-    else {
-        total = pos_a + low;
-    }
-    
-    position = total;
+    position = total*calibrator;
     
 }
 

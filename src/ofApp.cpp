@@ -21,7 +21,7 @@ void ofApp::setup(){
     screenwidth = height/2.154;
     gapwidth = 1280*0.005;
     
-    cout << "ナブコ: 本日は披露したいこと。" << endl;
+    cout << "\nナブコ: 本日は披露したいこと。" << endl;
     cout << "\n早川さん: ";
     cin >> title;
     
@@ -124,7 +124,7 @@ void ofApp::update(){
             std::exit(1);
         }
         
-        cout << "\nナブコ: 一回ドアを開けて、少々お待ちください…" << endl;
+        cout << "\nナブコ: 一回ドアを開けて、少々お待ちください…\n" << endl;
         
         ofxOscMessage m;
         m.setAddress("/open");
@@ -792,7 +792,7 @@ void ofApp::update(){
     lfTexture.draw(0,0);
     rfTexture.draw(fixwidth + gapwidth*3 + screenwidth*2,0);
     lTexture.draw((fixwidth + gapwidth)-doorposition,0);
-    rTexture.draw((fixwidth + gapwidth*2 + screenwidth) + doorposition,0);
+    rTexture.draw((fixwidth + gapwidth*2 + screenwidth) +doorposition,0);
     projection.end();
     
 }

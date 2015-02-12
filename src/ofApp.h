@@ -63,7 +63,6 @@ private:
     int fixwidth;
     int screenwidth;
     int gapwidth;
-    int calibrator;
     int totalwidth;
     int totalheight;
     int totalheight2;

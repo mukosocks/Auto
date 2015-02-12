@@ -39,6 +39,7 @@ public:
     
 private:
     
+    float calibrator;
     int position;   // stores position of door
     int state;      // stores state of door
     int maxgap;     // stores maximum gap size of the door
