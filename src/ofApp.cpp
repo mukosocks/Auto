@@ -21,7 +21,7 @@ void ofApp::setup(){
     screenwidth = height/2.154;
     gapwidth = 1280*0.005;
     
-    cout << "ナブコ: 本日で何が披露したいのか。" << endl;
+    cout << "ナブコ: 本日は披露したいこと。" << endl;
     cout << "\n早川さん: ";
     cin >> title;
     
@@ -103,7 +103,7 @@ void ofApp::update(){
     
     if (receiving == false) {
         
-        cout << "\nナブコ: 恐れ入りますがLA-N10を連接していますか。" << endl;
+        cout << "\nナブコ: 恐れ入りますがLA-N10とは接続されてますか。" << endl;
         std::exit(1);
         
     }
@@ -124,7 +124,7 @@ void ofApp::update(){
             std::exit(1);
         }
         
-        cout << "\nナブコ: 一回ドアを伸ばして、少々お待ちください…" << endl;
+        cout << "\nナブコ: 一回ドアを開けて、少々お待ちください…" << endl;
         
         ofxOscMessage m;
         m.setAddress("/open");
