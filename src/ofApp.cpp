@@ -8,15 +8,22 @@ void ofApp::setup(){
     
     ofSetFrameRate(30);
     
-    // initialize dimensions
+    // projection dimensions
+    
+    totalwidth = ofGetScreenWidth();
+    totalheight = ofGetScreenHeight();
+    totalheight2 = totalwidth/1.948;
+    
+    // video dimensions
     width = 1280;
     height = width/1.948;
     fixwidth = height/2.021;
     screenwidth = height/2.154;
     gapwidth = 1280*0.005;
     
-    title = "kagari";
-    // enable to test variations
+    cout << "ナブコ: 本日で何が披露したいのか。" << endl;
+    cout << "\n早川さん: ";
+    cin >> title;
     
     // load Movie
     closed.loadMovie("content/" + title + "/closed.mov");
@@ -42,6 +49,14 @@ void ofApp::setup(){
     rTexture.allocate(screenwidth,height, GL_RGB);
     rfTexture.allocate(fixwidth,height, GL_RGB);
     
+    // FBO
+    projection.allocate(width,height, GL_RGB);
+    projection.setAnchorPoint(width/2, height/2);
+    
+    projection.begin();
+    ofClear(255,255,255,0);
+    projection.end();
+    
     ofSetVerticalSync(true);
     
 }
@@ -53,6 +68,8 @@ void ofApp::update(){
     
     // call Osc receiver functions
     while (receiver.hasWaitingMessages()) {
+        
+        receiving = true;
         
         ofxOscMessage m;
         receiver.getNextMessage(&m);
@@ -76,7 +93,7 @@ void ofApp::update(){
         
     }
     
-    // Distribute Values
+    // Give values to Door and Sensor Classes
     
     rn60.setPosition(ofst4,ofst5);
     rn60.setState(ofst6);
@@ -84,586 +101,780 @@ void ofApp::update(){
     is6000.setSensorGrid(ofst8, ofst9, ofst10, ofst11, ofst12, ofst13);
     is6000.setPresence();
     
-    doorposition = rn60.getPosition();
-    doorstate = rn60.getState();
-    presence = is6000.getPresence();
+    if (receiving == false) {
+        
+        cout << "\nナブコ: 恐れ入りますがLA-N10を連接していますか。" << endl;
+        std::exit(1);
+        
+    }
     
-    // Frame Control
+    // if Values are coming from the Door, initiate Boot Procedure
     
-    // if State Change detected . . .
+    if (receiving == true && startup == false && startupcheck == false) {
+        
+        startup = true;
+        startupcheck = true;
+        
+        if (closed.isLoaded() == true && closing.isLoaded() == true && opening.isLoaded() == true && opened.isLoaded() == true) {
+            
+            cout << "\nナブコ: " << title << "ですね。" << "承知しました! " << endl;
+        } else {
+            
+            cout << "\nナブコ: ちょっとコンテンツを見つけない。" << endl;
+            std::exit(1);
+        }
+        
+        cout << "\nナブコ: 一回ドアを伸ばして、少々お待ちください…" << endl;
+        
+        ofxOscMessage m;
+        m.setAddress("/open");
+        m.addIntArg(1);
+        sender.sendMessage(m);
+        
+    }
     
-    if (doorstate != lastdoorstate) {
+    // if Door is Fully Opened during Boot Procedure
+    
+    if (startupcheck == true && rn60.getState() == 6) {
         
-        // initialize video frames  // create fuction to calculate initial frame by pass door position
+        rn60.setMaxGap(rn60.getPosition()); // gives max gap value to Door Class
         
-        tempstate = doorstate;
-        temppct = ((doorposition*100)/maxgap);
+        startupchecked = true;
         
-        //cout << "gap percentage: " << temppct;
+        ofxOscMessage m;
+        m.setAddress("/close");
+        m.addIntArg(2);
+        sender.sendMessage(m);
         
-        switch (tempstate) {
+    }
+    
+    // if Max Gap is collected and Door is Closed
+    
+    if (startupchecked == true && rn60.getState() == 0) {
+        
+        cout << "\nよし。" << endl;
+        startupchecked = false;
+        startupcheck = false;
+        
+    }
+    
+    if (startupcheck == false && startupchecked == false && startup == true) {
+        
+        // Distribute Values
+        
+        doorposition = rn60.getPosition();
+        maxgap = rn60.getMaxGap();
+        doorstate = rn60.getState();
+        presence = is6000.getPresence();
+        
+        switch (doorstate) {
                 
-            case 0: // fully closed
-                tempframe = (closed.getTotalNumFrames() * temppct) / 100;
-                //cout << " start frame: " << tempframe << endl;
-                closed.setFrame(tempframe); // tempframe: frame at position, 0: beginning of video
-                closed.setFrame(tempframe);
+            case 0:
+                doorstate_str = "CLOSED";
                 break;
-
-            case 2: // closing
-                tempframe = (closing.getTotalNumFrames() * (100 - temppct)) / 100;
-                //cout << " start frame: " << tempframe << endl;
-                closing.setFrame(tempframe);
-                closing.setFrame(tempframe);
+                
+            case 1:
+                doorstate_str = "SLOW CLOSING";
                 break;
-
-            case 4: // opening
-                tempframe = (opening.getTotalNumFrames() * temppct) / 100;
-                //cout << " start frame: " << tempframe << endl;
-                opening.setFrame(tempframe);
-                opening.setFrame(tempframe);
+                
+            case 2:
+                doorstate_str = "CLOSING";
                 break;
-
-            case 6: // fully opened
-                tempframe = (opened.getTotalNumFrames() * temppct) / 100;
-                //cout << " start frame: " << tempframe << endl;
-                opened.setFrame(tempframe);
-                opened.setFrame(tempframe);
+                
+            case 3:
+                doorstate_str = "STOPPED";
                 break;
+                
+            case 4:
+                doorstate_str = "OPENING";
+                break;
+                
+            case 5:
+                doorstate_str = "SLOW OPENING";
+                break;
+                
+            case 6:
+                doorstate_str = "OPENED";
+                break;
+                
             default:
+                doorstate_str = "null";
                 break;
+                
         }
         
-    } else {
-        
-        doorstatechanged = false;
-        
-    }
-    
-    temppct = NULL;
-    lastdoorstate = doorstate;
-    
-    // Image Processing
-    
-    // update Movie frames
-    closed.update();
-    closing.update();
-    opening.update();
-    opened.update();
-    
-    if (doorstate == 0) {
-        
-        // when a new frame is available. . .
-        if (closed.isFrameNew()){
-            
-            // ------------------------------------------
-            
-            // left fix casting
-            
-            // total number of pixels within territory
-            //int totalfixPixels = fixwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels = closed.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = 0; j < fixwidth; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    lfpixelbasket[(i*fixwidth+j)*3] = pixels[(i*1280+j)*3];
-                    lfpixelbasket[(i*fixwidth+j)*3+1] = pixels[(i*1280+j)*3+1];
-                    lfpixelbasket[(i*fixwidth+j)*3+2] = pixels[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            lfTexture.loadData(lfpixelbasket, fixwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // left screen casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels2 = closed.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth; j < fixwidth + gapwidth + screenwidth; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3] = pixels2[(i*1280+j)*3];
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+1] = pixels2[(i*1280+j)*3+1];
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+2] = pixels2[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            lTexture.loadData(lpixelbasket,screenwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // right screen casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels3 = closed.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth*2 + screenwidth; j < fixwidth + gapwidth*2 + screenwidth*2; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3] = pixels3[(i*1280+j)*3];
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+1] = pixels3[(i*1280+j)*3+1];
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+2] = pixels3[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            rTexture.loadData(rpixelbasket,screenwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // right fix casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels4 = closed.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth*3 + screenwidth*2; j < fixwidth*2 + gapwidth*3 + screenwidth*2; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3] = pixels4[(i*1280+j)*3];
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+1] = pixels4[(i*1280+j)*3+1];
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+2] = pixels4[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            rfTexture.loadData(rfpixelbasket,fixwidth,height, GL_RGB);
+        switch (presence) {
+                
+            case 0:
+                presence_str = "nobody.";
+                break;
+                
+            case 1:
+                presence_str = "someone is HERE!";
+                break;
+                
+            case 2:
+                presence_str = "someone is THERE!";
+                break;
+                
+            default:
+                presence_str = "null";
+                break;
+                
         }
         
-    }
-    
-    if (doorstate == 2) {
-        
-        // when a new frame is available. . .
-        if (closing.isFrameNew()){
+        if (interrupt == true) {
             
-            // ------------------------------------------
+            interruptswitchr = 160;
+            interruptswitchg = 230;
             
-            // left fix casting
+        } else {
             
-            // total number of pixels within territory
-            //int totalfixPixels = fixwidth*height*3;
+            interruptswitchr = 0;
+            interruptswitchg = 0;
             
-            // collect all pixels from the frame
-            unsigned char * pixels = closing.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = 0; j < fixwidth; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    lfpixelbasket[(i*fixwidth+j)*3] = pixels[(i*1280+j)*3];
-                    lfpixelbasket[(i*fixwidth+j)*3+1] = pixels[(i*1280+j)*3+1];
-                    lfpixelbasket[(i*fixwidth+j)*3+2] = pixels[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            lfTexture.loadData(lfpixelbasket, fixwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // left screen casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels2 = closing.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth; j < fixwidth + gapwidth + screenwidth; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3] = pixels2[(i*1280+j)*3];
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+1] = pixels2[(i*1280+j)*3+1];
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+2] = pixels2[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            lTexture.loadData(lpixelbasket,screenwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // right screen casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels3 = closing.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth*2 + screenwidth; j < fixwidth + gapwidth*2 + screenwidth*2; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3] = pixels3[(i*1280+j)*3];
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+1] = pixels3[(i*1280+j)*3+1];
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+2] = pixels3[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            rTexture.loadData(rpixelbasket,screenwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // right fix casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels4 = closing.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth*3 + screenwidth*2; j < fixwidth*2 + gapwidth*3 + screenwidth*2; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3] = pixels4[(i*1280+j)*3];
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+1] = pixels4[(i*1280+j)*3+1];
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+2] = pixels4[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            rfTexture.loadData(rfpixelbasket,fixwidth,height, GL_RGB);
         }
         
-    }
-    
-    if (doorstate == 4) {
+        // Frame Control
         
-        // when a new frame is available. . .
-        if (opening.isFrameNew()){
+        // if State Change detected . . .
+        
+        if (doorstate != lastdoorstate) {
             
-            // ------------------------------------------
-            
-            // left fix casting
-            
-            // total number of pixels within territory
-            //int totalfixPixels = fixwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels = opening.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = 0; j < fixwidth; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    lfpixelbasket[(i*fixwidth+j)*3] = pixels[(i*1280+j)*3];
-                    lfpixelbasket[(i*fixwidth+j)*3+1] = pixels[(i*1280+j)*3+1];
-                    lfpixelbasket[(i*fixwidth+j)*3+2] = pixels[(i*1280+j)*3+2];
-                    
-                }
+            if (doorstate == 4 && lastdoorstate == 2) {
+                
+                interruptpos = doorposition;
+                interruptpct = ((interruptpos*100)/maxgap);
+                interrupt = true;
+                
             }
-            // pour into the cast.
-            lfTexture.loadData(lfpixelbasket, fixwidth,height, GL_RGB);
             
-            // ------------------------------------------
+            // initialize video frames  // create fuction to calculate initial frame by pass door position
             
-            // left screen casting
+            tempstate = doorstate;
+            temppct = ((doorposition*100)/maxgap);
             
-            // when a new frame is available. . .
+            //cout << "gap percentage: " << temppct;
             
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels2 = opening.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth; j < fixwidth + gapwidth + screenwidth; j++){ // go through the entirely of each row.
+            switch (tempstate) {
                     
-                    // line up into the basket RGB triplets of picked pixlets
+                case 0: // fully closed
+                    tempframe = (closed.getTotalNumFrames() * temppct) / 100;
+                    //cout << " start frame: " << tempframe << endl;
+                    //closed.setFrame(tempframe); // tempframe: frame at position, 0: beginning of video
+                    closed.setFrame(0);
+                    break;
                     
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3] = pixels2[(i*1280+j)*3];
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+1] = pixels2[(i*1280+j)*3+1];
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+2] = pixels2[(i*1280+j)*3+2];
+                case 2: // closing
+                    tempframe = (closing.getTotalNumFrames() * (100 - temppct)) / 100;
+                    //cout << " start frame: " << tempframe << endl;
+                    //closing.setFrame(tempframe);
+                    closing.setFrame(0);
+                    break;
                     
-                }
+                case 4: // opening
+                    tempframe = (opening.getTotalNumFrames() * temppct) / 100;
+                    //cout << " start frame: " << tempframe << endl;
+                    //opening.setFrame(tempframe);
+                    opening.setFrame(0);
+                    break;
+                    
+                case 6: // fully opened
+                    tempframe = (opened.getTotalNumFrames() * temppct) / 100;
+                    //cout << " start frame: " << tempframe << endl;
+                    //opened.setFrame(tempframe);
+                    opened.setFrame(0);
+                    break;
+                default:
+                    break;
             }
-            // pour into the cast.
-            lTexture.loadData(lpixelbasket,screenwidth,height, GL_RGB);
             
-            // ------------------------------------------
+        } else {
             
-            // right screen casting
+            doorstatechanged = false;
             
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels3 = opening.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth*2 + screenwidth; j < fixwidth + gapwidth*2 + screenwidth*2; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3] = pixels3[(i*1280+j)*3];
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+1] = pixels3[(i*1280+j)*3+1];
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+2] = pixels3[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            rTexture.loadData(rpixelbasket,screenwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // right fix casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels4 = opening.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth*3 + screenwidth*2; j < fixwidth*2 + gapwidth*3 + screenwidth*2; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3] = pixels4[(i*1280+j)*3];
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+1] = pixels4[(i*1280+j)*3+1];
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+2] = pixels4[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            rfTexture.loadData(rfpixelbasket,fixwidth,height, GL_RGB);
         }
         
-    }
-    
-    if (doorstate == 6) {
+        temppct = NULL;
+        lastdoorstate = doorstate;
         
-        // when a new frame is available. . .
-        if (opened.isFrameNew()){
+        if (interrupt == true && doorstate == 6) {
             
-            // ------------------------------------------
+            interrupt = false;
             
-            // left fix casting
-            
-            // total number of pixels within territory
-            //int totalfixPixels = fixwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels = opened.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = 0; j < fixwidth; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    lfpixelbasket[(i*fixwidth+j)*3] = pixels[(i*1280+j)*3];
-                    lfpixelbasket[(i*fixwidth+j)*3+1] = pixels[(i*1280+j)*3+1];
-                    lfpixelbasket[(i*fixwidth+j)*3+2] = pixels[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            lfTexture.loadData(lfpixelbasket, fixwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // left screen casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels2 = opened.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth; j < fixwidth + gapwidth + screenwidth; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3] = pixels2[(i*1280+j)*3];
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+1] = pixels2[(i*1280+j)*3+1];
-                    lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+2] = pixels2[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            lTexture.loadData(lpixelbasket,screenwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // right screen casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels3 = opened.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth*2 + screenwidth; j < fixwidth + gapwidth*2 + screenwidth*2; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3] = pixels3[(i*1280+j)*3];
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+1] = pixels3[(i*1280+j)*3+1];
-                    rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+2] = pixels3[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            rTexture.loadData(rpixelbasket,screenwidth,height, GL_RGB);
-            
-            // ------------------------------------------
-            
-            // right fix casting
-            
-            // when a new frame is available. . .
-            
-            // total number of pixels within territory
-            //int totalscreenPixels = screenwidth*height*3;
-            
-            // collect all pixels from the frame
-            unsigned char * pixels4 = opened.getPixels();
-            
-            // maneuver through the field
-            
-            for (int i = 0; i < height; i++){ // while stepping down the collumn,
-                for (int j = fixwidth + gapwidth*3 + screenwidth*2; j < fixwidth*2 + gapwidth*3 + screenwidth*2; j++){ // go through the entirely of each row.
-                    
-                    // line up into the basket RGB triplets of picked pixlets
-                    
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3] = pixels4[(i*1280+j)*3];
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+1] = pixels4[(i*1280+j)*3+1];
-                    rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+2] = pixels4[(i*1280+j)*3+2];
-                    
-                }
-            }
-            // pour into the cast.
-            rfTexture.loadData(rfpixelbasket,fixwidth,height, GL_RGB);
         }
         
+        // Image Processing
+        
+        // update Movie frames
+        closed.update();
+        closing.update();
+        opening.update();
+        opened.update();
+        
+        if (doorstate == 0) {
+            
+            // when a new frame is available. . .
+            if (closed.isFrameNew()){
+                
+                // ------------------------------------------
+                
+                // left fix casting
+                
+                // total number of pixels within territory
+                //int totalfixPixels = fixwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels = closed.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = 0; j < fixwidth; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        lfpixelbasket[(i*fixwidth+j)*3] = pixels[(i*1280+j)*3];
+                        lfpixelbasket[(i*fixwidth+j)*3+1] = pixels[(i*1280+j)*3+1];
+                        lfpixelbasket[(i*fixwidth+j)*3+2] = pixels[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                lfTexture.loadData(lfpixelbasket, fixwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // left screen casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels2 = closed.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth; j < fixwidth + gapwidth + screenwidth; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3] = pixels2[(i*1280+j)*3];
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+1] = pixels2[(i*1280+j)*3+1];
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+2] = pixels2[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                lTexture.loadData(lpixelbasket,screenwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // right screen casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels3 = closed.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth*2 + screenwidth; j < fixwidth + gapwidth*2 + screenwidth*2; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3] = pixels3[(i*1280+j)*3];
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+1] = pixels3[(i*1280+j)*3+1];
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+2] = pixels3[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                rTexture.loadData(rpixelbasket,screenwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // right fix casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels4 = closed.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth*3 + screenwidth*2; j < fixwidth*2 + gapwidth*3 + screenwidth*2; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3] = pixels4[(i*1280+j)*3];
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+1] = pixels4[(i*1280+j)*3+1];
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+2] = pixels4[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                rfTexture.loadData(rfpixelbasket,fixwidth,height, GL_RGB);
+            }
+            
+        }
+        
+        if (doorstate == 2) {
+            
+            // when a new frame is available. . .
+            if (closing.isFrameNew()){
+                
+                // ------------------------------------------
+                
+                // left fix casting
+                
+                // total number of pixels within territory
+                //int totalfixPixels = fixwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels = closing.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = 0; j < fixwidth; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        lfpixelbasket[(i*fixwidth+j)*3] = pixels[(i*1280+j)*3];
+                        lfpixelbasket[(i*fixwidth+j)*3+1] = pixels[(i*1280+j)*3+1];
+                        lfpixelbasket[(i*fixwidth+j)*3+2] = pixels[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                lfTexture.loadData(lfpixelbasket, fixwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // left screen casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels2 = closing.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth; j < fixwidth + gapwidth + screenwidth; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3] = pixels2[(i*1280+j)*3];
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+1] = pixels2[(i*1280+j)*3+1];
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+2] = pixels2[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                lTexture.loadData(lpixelbasket,screenwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // right screen casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels3 = closing.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth*2 + screenwidth; j < fixwidth + gapwidth*2 + screenwidth*2; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3] = pixels3[(i*1280+j)*3];
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+1] = pixels3[(i*1280+j)*3+1];
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+2] = pixels3[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                rTexture.loadData(rpixelbasket,screenwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // right fix casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels4 = closing.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth*3 + screenwidth*2; j < fixwidth*2 + gapwidth*3 + screenwidth*2; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3] = pixels4[(i*1280+j)*3];
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+1] = pixels4[(i*1280+j)*3+1];
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+2] = pixels4[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                rfTexture.loadData(rfpixelbasket,fixwidth,height, GL_RGB);
+            }
+            
+        }
+        
+        if (doorstate == 4) {
+            
+            // when a new frame is available. . .
+            if (opening.isFrameNew()){
+                
+                // ------------------------------------------
+                
+                // left fix casting
+                
+                // total number of pixels within territory
+                //int totalfixPixels = fixwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels = opening.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = 0; j < fixwidth; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        lfpixelbasket[(i*fixwidth+j)*3] = pixels[(i*1280+j)*3];
+                        lfpixelbasket[(i*fixwidth+j)*3+1] = pixels[(i*1280+j)*3+1];
+                        lfpixelbasket[(i*fixwidth+j)*3+2] = pixels[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                lfTexture.loadData(lfpixelbasket, fixwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // left screen casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels2 = opening.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth; j < fixwidth + gapwidth + screenwidth; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3] = pixels2[(i*1280+j)*3];
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+1] = pixels2[(i*1280+j)*3+1];
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+2] = pixels2[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                lTexture.loadData(lpixelbasket,screenwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // right screen casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels3 = opening.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth*2 + screenwidth; j < fixwidth + gapwidth*2 + screenwidth*2; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3] = pixels3[(i*1280+j)*3];
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+1] = pixels3[(i*1280+j)*3+1];
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+2] = pixels3[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                rTexture.loadData(rpixelbasket,screenwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // right fix casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels4 = opening.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth*3 + screenwidth*2; j < fixwidth*2 + gapwidth*3 + screenwidth*2; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3] = pixels4[(i*1280+j)*3];
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+1] = pixels4[(i*1280+j)*3+1];
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+2] = pixels4[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                rfTexture.loadData(rfpixelbasket,fixwidth,height, GL_RGB);
+            }
+            
+        }
+        
+        if (doorstate == 6) {
+            
+            // when a new frame is available. . .
+            if (opened.isFrameNew()){
+                
+                // ------------------------------------------
+                
+                // left fix casting
+                
+                // total number of pixels within territory
+                //int totalfixPixels = fixwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels = opened.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = 0; j < fixwidth; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        lfpixelbasket[(i*fixwidth+j)*3] = pixels[(i*1280+j)*3];
+                        lfpixelbasket[(i*fixwidth+j)*3+1] = pixels[(i*1280+j)*3+1];
+                        lfpixelbasket[(i*fixwidth+j)*3+2] = pixels[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                lfTexture.loadData(lfpixelbasket, fixwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // left screen casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels2 = opened.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth; j < fixwidth + gapwidth + screenwidth; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3] = pixels2[(i*1280+j)*3];
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+1] = pixels2[(i*1280+j)*3+1];
+                        lpixelbasket[(i*screenwidth+j-(fixwidth+gapwidth))*3+2] = pixels2[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                lTexture.loadData(lpixelbasket,screenwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // right screen casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels3 = opened.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth*2 + screenwidth; j < fixwidth + gapwidth*2 + screenwidth*2; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3] = pixels3[(i*1280+j)*3];
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+1] = pixels3[(i*1280+j)*3+1];
+                        rpixelbasket[(i*screenwidth+j-(fixwidth + gapwidth*2 + screenwidth))*3+2] = pixels3[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                rTexture.loadData(rpixelbasket,screenwidth,height, GL_RGB);
+                
+                // ------------------------------------------
+                
+                // right fix casting
+                
+                // when a new frame is available. . .
+                
+                // total number of pixels within territory
+                //int totalscreenPixels = screenwidth*height*3;
+                
+                // collect all pixels from the frame
+                unsigned char * pixels4 = opened.getPixels();
+                
+                // maneuver through the field
+                
+                for (int i = 0; i < height; i++){ // while stepping down the collumn,
+                    for (int j = fixwidth + gapwidth*3 + screenwidth*2; j < fixwidth*2 + gapwidth*3 + screenwidth*2; j++){ // go through the entirely of each row.
+                        
+                        // line up into the basket RGB triplets of picked pixlets
+                        
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3] = pixels4[(i*1280+j)*3];
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+1] = pixels4[(i*1280+j)*3+1];
+                        rfpixelbasket[(i*fixwidth+j-(fixwidth + gapwidth*3 + screenwidth*2))*3+2] = pixels4[(i*1280+j)*3+2];
+                        
+                    }
+                }
+                // pour into the cast.
+                rfTexture.loadData(rfpixelbasket,fixwidth,height, GL_RGB);
+            }
+            
+        }
     }
-
+    
+    // placement of the completed moulds.
+    
+    projection.begin();
+    ofBackground(0);
+    lfTexture.draw(0,0);
+    rfTexture.draw(fixwidth + gapwidth*3 + screenwidth*2,0);
+    lTexture.draw((fixwidth + gapwidth)-doorposition,0);
+    rTexture.draw((fixwidth + gapwidth*2 + screenwidth) + doorposition,0);
+    projection.end();
     
 }
 
 //--------------------------------------------------------------
 void ofApp::draw(){
     
-    // Display Images
+    if (startupcheck == false && startupchecked == false && startup == true) {
+        
+        // Display Images
+        
+        projection.draw(totalwidth/2,totalheight/2);
+        
+        // Monitoring Values
+        
+        ofDrawBitmapString(title + " at " + ofToString(ofGetFrameRate())+ "fps", 10, 50);
+        ofSetColor(0,160,230);
+        ofDrawBitmapString("'1' - OPEN  '2' - CLOSE  '3' - STOP ", 980, 50);
+        ofSetColor(255,255,255);
+        ofDrawBitmapString("Door Position: " + ofToString(doorposition), 10, 100 + totalheight2);
+        ofDrawBitmapString("Door State: " + doorstate_str, 210, 100 + totalheight2);
+        ofDrawBitmapString("Sensor says: " + presence_str, 410, 100 + totalheight2);
+        ofSetColor(interruptswitchr,interruptswitchg,0);
+        ofDrawBitmapString("Interrupted @ " + ofToString(interruptpct) + "%", 980, 100 + totalheight2);
+        ofSetColor(255,255,255);
+        
+        // Debugging
+        
+        // door data check
+        
+        //cout << doorposition << endl;
+        //cout << doorstate << endl;
+        //cout << presence << endl;
+        
+        // dimension value check
+        
+        //cout << width << endl;
+        //cout << height << endl;
+        //cout << fixwidth << endl;
+        //cout << screenwidth << endl;
+        //cout << gapwidth << endl;
+        
+    }
     
-    // placement of the completed moulds.
-    
-    lfTexture.draw(0,0);
-
-    rfTexture.draw(fixwidth + gapwidth*3 + screenwidth*2,0);
-    
-    lTexture.draw((fixwidth + gapwidth)-doorposition,0);
-    rTexture.draw((fixwidth + gapwidth*2 + screenwidth) + doorposition,0);
-    
-    
-    ofDrawBitmapString(ofToString(ofGetFrameRate())+"fps", 10, 15);
-    
-    // Debugging
-    
-    // door data check
-    
-    //cout << doorposition << endl;
-    //cout << doorstate << endl;
-    //cout << presence << endl;
-    
-    // dimension value check
-    
-    //cout << width << endl;
-    //cout << height << endl;
-    //cout << fixwidth << endl;
-    //cout << screenwidth << endl;
-    //cout << gapwidth << endl;
-
 }
 
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key){
     
+    if (key == '1') {
+        
+        ofxOscMessage m;
+        m.setAddress("/open");
+        m.addIntArg(1);
+        sender.sendMessage(m);
+        
+    }
+    
+    if (key == '2') {
+        
+        ofxOscMessage m;
+        m.setAddress("/close");
+        m.addIntArg(2);
+        sender.sendMessage(m);
+        
+    }
+    
+    if (key == '3') {
+        
+        ofxOscMessage m;
+        m.setAddress("/stop");
+        m.addIntArg(3);
+        sender.sendMessage(m);
+        
+    }
+    
+    if (key == 'k' || key == 'K') {
+        
+        cout << "\nナブコ: ＊＊＊お先に失礼します＊＊＊\n" << endl;
+        std::exit(1);
+        
+    }
     
 }
 
@@ -710,6 +921,6 @@ void ofApp::dragEvent(ofDragInfo dragInfo){
 //--------------------------------------------------------------
 
 void ofApp::exit(){
-
+    
 }
 

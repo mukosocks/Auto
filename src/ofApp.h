@@ -54,6 +54,8 @@ private:
     ofTexture           rTexture;
     ofTexture           rfTexture;
     
+    ofFbo projection;
+    
     // Dimension variables
     
     int width;
@@ -61,6 +63,10 @@ private:
     int fixwidth;
     int screenwidth;
     int gapwidth;
+    int calibrator;
+    int totalwidth;
+    int totalheight;
+    int totalheight2;
     
     // Door Readings
     int ofst4;
@@ -83,11 +89,31 @@ private:
     // Content Control variables
     
     string title;
-    int maxgap = 304;
+    int maxgap;
     int tempstate;
     int tempframe;
     int temppct;
     int lastdoorstate;
+    int interruptpos;
+    int interruptpct;
+    bool interrupt;
     bool doorstatechanged;
+    
+    
+    // Boot States
+    
+    bool startup = false;
+    bool startupcheck = false;
+    bool startupchecked = false;
+    bool receiving = false;
+    
+    // Value Monitoring Strings
+    
+    string doorstate_str;
+    string presence_str;
+    string interrupt_str;
+    int interruptswitchr;
+    int interruptswitchg;
+    
     
 };

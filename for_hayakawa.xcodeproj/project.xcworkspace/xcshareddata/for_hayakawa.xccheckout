@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>BAB99CE4-A2B0-4E0C-81D3-6CC56FB50052</string>
+	<key>IDESourceControlProjectName</key>
+	<string>for_hayakawa</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>3CD70A1C732903154CCFBE3F700A4E1A49D3D712</key>
+		<string>https://bitbucket.org/uriu/eagle.git</string>
+		<key>F91BDC5017C169CC97B63F10A18BC4A8F2E5001C</key>
+		<string>https://github.com/mukosocks/Auto.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>for_hayakawa.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>3CD70A1C732903154CCFBE3F700A4E1A49D3D712</key>
+		<string>../../../../..</string>
+		<key>F91BDC5017C169CC97B63F10A18BC4A8F2E5001C</key>
+		<string>../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/mukosocks/Auto.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>F91BDC5017C169CC97B63F10A18BC4A8F2E5001C</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>3CD70A1C732903154CCFBE3F700A4E1A49D3D712</string>
+			<key>IDESourceControlWCCName</key>
+			<string>..</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>F91BDC5017C169CC97B63F10A18BC4A8F2E5001C</string>
+			<key>IDESourceControlWCCName</key>
+			<string>togithub</string>
+		</dict>
+	</array>
+</dict>
+</plist>
